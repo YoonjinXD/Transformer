@@ -20,16 +20,16 @@ dtype = torch.FloatTensor
 
 class Configuration(object):
     def __init__(self):
-        self.d_model= 256
-        self.FF_innerlayer_dim= 512
-        self.key_vector_dim= 128
-        self.value_vector_dim= 128
-        self.emb_dimension= 256
+        self.d_model= 128
+        self.FF_innerlayer_dim= 256
+        self.key_vector_dim= 64
+        self.value_vector_dim= 64
+        self.emb_dimension= 128
         self.encoder_layer_num= 3
-        self.decoder_layer_num= 4
+        self.decoder_layer_num= 3
         self.attention_num_heads= 3
         self.batch_size = 32
-        
+config = Configuration()        
 """
     [Multi Head Self Attentional Module]
      Where B= batch_size, S= sequence_size, D= model_dimeision, H= head_num
@@ -286,30 +286,46 @@ def make_batch(batch_size, corpus, vocab, max_len):
             words = sentence.split(' ')
             temp = []
             for word in words:
-                temp.append(vocab.w2i[word])
+                if word in vocab.w2i:
+                    temp.append(vocab.w2i[word])
+                else:
+                    temp.append(vocab.w2i['<unk>'])
+
             for i in range(max_len - len(words)):
                 temp.append(vocab.w2i['<pad>'])
             batch.append(temp)
         result.append(torch.tensor(batch))
     return result
 
+def decode_sentence(index_seq, vocab):
+    seq = index_seq.tolist()
+    result = []
+    for idx in seq:
+        if (idx == 0): 
+            continue
+        if (idx == 3):
+            result.append('?')
+            continue
+        result.append(vocab.i2w[idx])
+    return ' '.join(result)
+
+
 """[Main]"""
 def main():
     # Load data
     print("Load dataset ...")
-    text_en = open('data/translation/train/train.en', 'r').readlines()[:10000]
-    text_de = open('data/translation/train/train.de', 'r').readlines()[:10000]
+    text_en = open('data/translation/train/train.en', 'r').readlines()[:2000]
+    text_de = open('data/translation/train/train.de', 'r').readlines()[:2000]
 
     # Preprocessing
     print("Preprocess ...")
     en_corpus, en_vocab, en_len = build_vocab('English', text_en)
     de_corpus, de_vocab, de_len = build_vocab('Deutsch', text_de)
-    print("English max length: %d \nGeramn max length: %d" %(en_len, de_len))
+    print("English max length: %d \nDeutsch max length: %d" %(en_len, de_len))
 
     # Training Setting
-    avg_loss = 0
+    epochs = 10
     total_loss = 0
-    total_dataset = len(dataset)
     source_size = len(en_vocab) +1
     target_size = len(de_vocab) +1
     input_len = en_len
@@ -322,34 +338,40 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=1e-4)
 
     # Training Interator
-    for epoch in range(20):
+    print("Training Starts ...")
+    for epoch in range(epochs):
         optimizer.zero_grad()
-        random.shuffle(dataset)
         en_inputs = make_batch(32, en_corpus, en_vocab, en_len)
         de_inputs = make_batch(32, de_corpus, de_vocab, de_len)
         dataset = list(zip(en_inputs, de_inputs))
+        total_dataset = len(dataset)
 
         for i, (enc_inputs, dec_inputs) in enumerate(dataset):
             outputs, enc_self_attns, dec_self_attns, dec_combo_attns = model(enc_inputs, dec_inputs)
             outputs = outputs.view(-1, outputs.size(2))
             loss = criterion(outputs, dec_inputs.contiguous().view(-1))
-            avg_loss += loss
             total_loss += loss
             loss.backward()
             optimizer.step()
 
-            if ((i+1)%100 == 0):
-                print('Epoch[%d/20]' %(epoch + 1), 'Step[%02d/%d]' %((i+1), total_dataset), 'loss=', '{:.6f}'.format(avg_loss/100))
-                avg_loss = 0
-
         print(' > %d Epoch Summary:' %(epoch + 1), 'Total avg loss = ', '{:.6f}'.format(total_loss/total_dataset))
-        avg_loss = 0
         total_loss = 0
 
     # Test
-    predict, _, _, _ = model(enc_inputs, dec_inputs)
-    predict = predict.data.max(1, keepdim=True)[1]
-    print(sentences[0], '->', [number_dict[n.item()] for n in predict.squeeze()])
+    text_en = open('data/translation/test/newstest2012.en', 'r').readlines()[:100]
+    text_de = open('data/translation/test/newstest2012.de', 'r').readlines()[:100]
+    en_corpus, _, _ = build_vocab('English', text_en)
+    de_corpus, _, _ = build_vocab('Deutsch', text_de)
+    en_inputs = make_batch(32, en_corpus, en_vocab, en_len)
+    de_inputs = make_batch(32, de_corpus, de_vocab, de_len)
+    test_dataset = list(zip(en_inputs, de_inputs))
+
+    for i, (enc_inputs, dec_inputs) in enumerate(test_dataset):
+        predict, _, _, _ = model(enc_inputs, dec_inputs)
+        predict = predict[0].data.max(1)[1]
+        print(decode_sentence(enc_inputs[0], en_vocab), '=', decode_sentence(dec_inputs[0], de_vocab))
+        print('> Prediction: ', decode_sentence(predict, de_vocab))
+        #print('> Prediction: ', decode_sentence(predict[0], de_vocab))
 
 
 main()
