@@ -14,22 +14,32 @@ import numpy as np
 import nltk
 import random
 from collections import Counter
+import pickle
+import pdb
+import argparse
+import seaborn as sns
 
 dtype = torch.FloatTensor
 
+os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1'
+if torch.cuda.is_available():
+    torch.cuda.init()
+    dtype = torch.cuda.FloatTensor
+    print("Cuda is availiable... Using %d devices" %(torch.cuda.device_count()))
 
 class Configuration(object):
     def __init__(self):
-        self.d_model= 128
-        self.FF_innerlayer_dim= 256
-        self.key_vector_dim= 64
-        self.value_vector_dim= 64
-        self.emb_dimension= 128
-        self.encoder_layer_num= 3
-        self.decoder_layer_num= 3
-        self.attention_num_heads= 3
+        self.d_model= 512
+        self.FF_innerlayer_dim= 1024
+        self.key_vector_dim= 256
+        self.value_vector_dim= 256
+        self.emb_dimension= 512
+        self.encoder_layer_num= 6
+        self.decoder_layer_num= 6
+        self.attention_num_heads= 8
         self.batch_size = 32
-config = Configuration()        
+config = Configuration()
+        
 """
     [Multi Head Self Attentional Module]
      Where B= batch_size, S= sequence_size, D= model_dimeision, H= head_num
@@ -53,6 +63,7 @@ class Multihead_SelfAttention(nn.Module):
         self.W_v = nn.Linear(self.d_model, self.d_v*self.h)
         self.W_o = nn.Linear(self.d_v*self.h, self.d_model)
         self.dropout = nn.Dropout(p=0.1)
+        self.norm =  nn.LayerNorm(self.d_model)
         # (OPTIONAL) for visualization. TODO: will be deleted later
         # self.scores = None
         
@@ -81,11 +92,10 @@ class Multihead_SelfAttention(nn.Module):
         
         # (2) Head_i = Scaled_Dot_Product(q*W^q_i, k*W^k_i, v*W^v_i)
         context, attention = self.scaled_dot_product(q_s, k_s, v_s, attn_mask)
-        
         # (3) Concat context vectors and Resize by using the W_o(Output weight)
         concated = context.transpose(1, 2).contiguous().view(self.batch_size, -1, self.h*self.d_v)
-        output = self.W_o(concated)
-        return nn.LayerNorm(self.d_model)(output + residual), attention
+        output = Variable(self.W_o(concated)).cuda()
+        return self.norm(output+residual), attention
         
         
 """
@@ -103,12 +113,13 @@ class Poswise_FeedForward(nn.Module):
         self.d_model = config.d_model
         self.conv1 = nn.Conv1d(self.d_model, self.d_ff, kernel_size=1)
         self.conv2 = nn.Conv1d(self.d_ff, self.d_model, kernel_size=1)
-        
+        self.norm = nn.LayerNorm(self.d_model)       
+ 
     def forward(self, x):
         residual = x
         output = nn.ReLU()(self.conv1(x.transpose(1, 2)))
         output = self.conv2(output).transpose(1, 2)
-        return nn.LayerNorm(self.d_model)(output + residual)
+        return self.norm(output + residual)
 
 """[Attention mask modules]"""
 def get_attn_mask(seq_q, seq_k):
@@ -151,6 +162,7 @@ class EncoderBlock(nn.Module):
         #self.dropout = nn.Dropout(p=0.1)
 
     def forward(self, inputs, attn_mask):
+        attn_mask = Variable(attn_mask).cuda()
         outputs, attention = self.attention_layer(inputs, inputs, inputs, attn_mask)
         encoder_outputs = self.feedforward_layer(outputs)
         return encoder_outputs, attention
@@ -175,7 +187,7 @@ class Encoder(nn.Module):
         super().__init__()
         d_emb = config.emb_dimension
         n_layers = config.encoder_layer_num
-        self.position_info = torch.tensor([i for i in range(100)])
+        self.position_info = Variable(torch.tensor([i for i in range(100)])).cuda()
         self.input_emb = nn.Embedding(input_vocab_size, d_emb)
         self.pos_emb = nn.Embedding.from_pretrained(get_sinusoid_encoding_table(input_len+1, d_emb),freeze=True)
         self.layers = nn.ModuleList([EncoderBlock(config.d_model) for _ in range(n_layers)])
@@ -202,9 +214,10 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList([DecoderBlock(config) for _ in range(n_layers)])
 
     def forward(self, targets, enc_inputs, enc_outputs): # targets = [B, S]
-        encoded_targets = self.target_emb(targets) + self.pos_emb(self.position_info)
-        subsequent_attn_mask = get_subsequent_attn_mask(targets)
-        attn_mask = get_attn_mask(targets, targets)
+        position_info = Variable(self.position_info).cuda()
+        encoded_targets = self.target_emb(targets) + self.pos_emb(position_info)
+        subsequent_attn_mask = Variable(get_subsequent_attn_mask(targets)).cuda()
+        attn_mask = get_attn_mask(targets, targets).byte()
 
         self_attn_mask = torch.gt((attn_mask + subsequent_attn_mask), 0)
         combo_attn_mask = get_attn_mask(targets, enc_inputs)
@@ -218,7 +231,7 @@ class Decoder(nn.Module):
         return outputs, self_attns, combo_attns
 
 
-"""[Full Pipeline]"""
+"""[Full Model]"""
 class Transformer(nn.Module):
     def __init__(self, config, source_size, target_size, source_len, target_len):
         super().__init__()
@@ -267,12 +280,15 @@ def build_vocab(lang_name, text):
     max_len = 0
 
     for sentence in text:
-        words = sentence.split(' ')
+        words = sentence.lower().split(' ')
         for word in words:
             vocab.add_word(word)
         corpus.append(' '.join(words[:-1]))
         if len(words) > max_len:
             max_len = len(words)
+
+    with open('vocab/%s_vocab.pkl' %(lang_name), 'wb') as f:
+        pickle.dump(vocab, f)
 
     print("%s corpus: %d num of words and %d num of sentences" %(lang_name, len(vocab), len(corpus)))
     return corpus, vocab, max_len
@@ -290,88 +306,138 @@ def make_batch(batch_size, corpus, vocab, max_len):
                     temp.append(vocab.w2i[word])
                 else:
                     temp.append(vocab.w2i['<unk>'])
-
             for i in range(max_len - len(words)):
                 temp.append(vocab.w2i['<pad>'])
             batch.append(temp)
         result.append(torch.tensor(batch))
     return result
 
-def decode_sentence(index_seq, vocab):
-    seq = index_seq.tolist()
-    result = []
-    for idx in seq:
-        if (idx == 0): 
+def show_clearly(idx_seq, vocab):
+    result = [vocab.i2w[n.item()] for n in idx_seq.squeeze()]
+    temp = []
+    for word in result:
+        if word == '<pad>':
             continue
-        if (idx == 3):
-            result.append('?')
-            continue
-        result.append(vocab.i2w[idx])
-    return ' '.join(result)
+        else:
+            temp.append(word)
+    return ' '.join(temp).encode('ascii', 'ignore')
 
+def show_attn(attn_name, data_num, attns, input_seq, pred_seq):
+    fig = plt.figure(figsize=(10, 10))
+    sns.set_style("ticks",{"xtick.major.size":7, "ytick.major.size":7})
+    attns = Variable(attns).cpu()
+    attn = attns[data_num][0].data.numpy()
+    input_seq = input_seq.split(' ')
+    pred_seq = pred_seq.split(' ')
+    g = sns.heatmap(attn[:len(input_seq), :len(pred_seq)])
+    g.set_xticklabels(input_seq, rotation=90)
+    g.set_yticklabels(pred_seq, rotation=0)
+    g.xaxis.tick_top()
+    plt.savefig('results/%s_attn.png' %(attn_name))
 
-"""[Main]"""
+"""[Pipeline]"""
 def main():
-    # Load data
-    print("Load dataset ...")
-    text_en = open('data/translation/train/train.en', 'r').readlines()[:2000]
-    text_de = open('data/translation/train/train.de', 'r').readlines()[:2000]
+    parser = argparse.ArgumentParser(description='transformer')
+    parser.add_argument('mode', metavar='mode', type=str)
+    args = parser.parse_args()
+    mode = args.mode
 
-    # Preprocessing
+    # 1. Load data
+    print("Load dataset ...")
+    text_en = open('data/translation/train/train.en', 'r', encoding='utf-8').readlines()[:25000]
+    text_de = open('data/translation/train/train.de', 'r', encoding='utf-8').readlines()[:25000]
+
+    # 2. Preprocessing
     print("Preprocess ...")
     en_corpus, en_vocab, en_len = build_vocab('English', text_en)
     de_corpus, de_vocab, de_len = build_vocab('Deutsch', text_de)
+
     print("English max length: %d \nDeutsch max length: %d" %(en_len, de_len))
 
-    # Training Setting
-    epochs = 10
+    # 3. Training Setting
+    epochs = 50
+    avg_loss = 0
     total_loss = 0
     source_size = len(en_vocab) +1
     target_size = len(de_vocab) +1
     input_len = en_len
     target_len = de_len
+
+    # 4. Create Model
     model = Transformer(config, source_size, target_size, input_len, target_len)
+    model.cuda()
+    #model = nn.DataParallel(model)
 
     criterion = nn.CrossEntropyLoss()
-
-    #optimizer = optim.Adam(model.parameters(), lr=0.001)
     optimizer = optim.SGD(model.parameters(), lr=1e-4)
 
-    # Training Interator
-    print("Training Starts ...")
+    # test mode Exception
+    if(mode == 'test'): 
+        epochs = 0
+        model.load_state_dict(torch.load('checkpoint.pkl'))
+
+    en_inputs = make_batch(32, en_corpus, en_vocab, en_len)
+    de_inputs = make_batch(32, de_corpus, de_vocab, de_len)
+    dataset = list(zip(en_inputs, de_inputs))
+    total_dataset = len(dataset)
+
+    # 5. Training Iterator
     for epoch in range(epochs):
         optimizer.zero_grad()
-        en_inputs = make_batch(32, en_corpus, en_vocab, en_len)
-        de_inputs = make_batch(32, de_corpus, de_vocab, de_len)
-        dataset = list(zip(en_inputs, de_inputs))
-        total_dataset = len(dataset)
 
         for i, (enc_inputs, dec_inputs) in enumerate(dataset):
-            outputs, enc_self_attns, dec_self_attns, dec_combo_attns = model(enc_inputs, dec_inputs)
+            enc_inputs = Variable(enc_inputs).cuda()
+            dec_inputs = Variable(dec_inputs).cuda()
+            outputs, _, _, _ = model(enc_inputs, dec_inputs)
             outputs = outputs.view(-1, outputs.size(2))
             loss = criterion(outputs, dec_inputs.contiguous().view(-1))
+            avg_loss += loss
             total_loss += loss
             loss.backward()
             optimizer.step()
 
+            if ((i+1)%100 == 0):
+                print('Epoch[%d/%d]' %(epoch + 1, epochs), 'Step[%02d/%d]' %((i+1), total_dataset), 'loss=', '{:.6f}'.format(avg_loss/100))
+                avg_loss = 0
+
         print(' > %d Epoch Summary:' %(epoch + 1), 'Total avg loss = ', '{:.6f}'.format(total_loss/total_dataset))
+        avg_loss = 0
         total_loss = 0
 
-    # Test
-    text_en = open('data/translation/test/newstest2012.en', 'r').readlines()[:100]
-    text_de = open('data/translation/test/newstest2012.de', 'r').readlines()[:100]
+        # save the model every 5 epochs
+        if epoch % 5 == 0:
+            torch.save(model.state_dict(), 'checkpoint.pkl')
+
+    # 6. Show sample result
+    # Load Test data
+    print("Load Test dataset ...")
+    text_en = open('data/translation/test/newstest2012.en', 'r', encoding='utf8').readlines()[:1000]
+    text_de = open('data/translation/test/newstest2012.de', 'r', encoding='utf8').readlines()[:1000]
+
     en_corpus, _, _ = build_vocab('English', text_en)
     de_corpus, _, _ = build_vocab('Deutsch', text_de)
-    en_inputs = make_batch(32, en_corpus, en_vocab, en_len)
-    de_inputs = make_batch(32, de_corpus, de_vocab, de_len)
-    test_dataset = list(zip(en_inputs, de_inputs))
+    print("English max length: %d \nDeutsch max length: %d" %(en_len, de_len))
 
-    for i, (enc_inputs, dec_inputs) in enumerate(test_dataset):
-        predict, _, _, _ = model(enc_inputs, dec_inputs)
-        predict = predict[0].data.max(1)[1]
-        print(decode_sentence(enc_inputs[0], en_vocab), '=', decode_sentence(dec_inputs[0], de_vocab))
-        print('> Prediction: ', decode_sentence(predict, de_vocab))
-        #print('> Prediction: ', decode_sentence(predict[0], de_vocab))
+    en_inputs = make_batch(32, en_corpus, en_vocab, 100)
+    de_inputs = make_batch(32, de_corpus, de_vocab, 100)
+    dataset = list(zip(en_inputs, de_inputs))
+    total_dataset = len(dataset)
+    model.eval()
+   
+    print('\n--------------<Sample Result>------------------\n')
+    enc_inputs, dec_inputs = dataset[0]
+    enc_inputs = Variable(enc_inputs).cuda()
+    dec_inputs = Variable(dec_inputs).cuda()
+    predict, enc_self_attns, dec_self_attns, dec_combo_attns = model(enc_inputs, dec_inputs)
 
+    data_num = 11
+    input_seq = str(show_clearly(enc_inputs[data_num], en_vocab))[2:]
+    target_seq = str(show_clearly(dec_inputs[data_num], de_vocab))[2:]
+    pred_seq = str(show_clearly(predict[data_num].data.max(1, keepdim=True)[1], de_vocab))[2:]
+    print('(I)', input_seq, '\n(T)', target_seq,'\n(P)', pred_seq)
+    show_attn('enc_self', data_num, enc_self_attns[5], input_seq, pred_seq)
+    show_attn('dec_self', data_num, dec_self_attns[5], input_seq, pred_seq)
+    show_attn('dec_combo', data_num, dec_combo_attns[5], input_seq, pred_seq)
+    print('\nAttention Graphs are created. Check \'results\' directory.')
 
 main()
