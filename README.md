@@ -7,5 +7,6 @@ To test the model
 3. run 'download.sh' scipt file to download datasets
 4. run 'python transformer.py test'
 
-###Sample Result Screenshot
-
+### Sample Result Screenshot
+![img]('sample_result.png')
+![img]('results/dec_combo_attn.png')
