@@ -1,6 +1,6 @@
 # Transformer
 
-Simple Implementation of Transformer which appeared in '[Attention is all you need](https://arxiv.org/abs/1706.03762)'.
+Simple Implementation of Transformer which appeared in '[Attention is all you need](https://arxiv.org/abs/1706.03762)'.<br>
 To test the model
 1. clone this repository
 2. download required packages
