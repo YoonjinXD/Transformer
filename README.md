@@ -8,5 +8,5 @@ To test the model
 4. run 'python transformer.py test'
 
 ### Sample Result Screenshot
-[img]('./sample_result.png')
-[img]('./results/dec_combo_attn.png')
+<img src='sample_result.png'>
+<img src='results/dec_combo_attn.png'>
