@@ -8,5 +8,11 @@ To test the model
 4. run 'python transformer.py test'
 
 ### Sample Result Screenshot
+#### (1) Sample sentence
 <img src='sample_result.png'>
+(I) = Input sentence
+(T) = Traget sentence
+(P) = Predict sentence
+
+#### (2) Sample attention graph
 <img src='results/dec_combo_attn.png'>
