@@ -8,11 +8,12 @@ To test the model
 4. run 'python transformer.py test'
 
 ### Sample Result Screenshot
+* Dataset: [Stanford's Neural Machine Translation Project](https://nlp.stanford.edu/projects/nmt/). English to Deutsch(Germany)
 #### (1) Sample sentence
 <img src='sample_result.png'>
-(I) = Input sentence
-(T) = Traget sentence
-(P) = Predict sentence
+(I) = Input sentence <br> 
+(T) = Traget sentence <br>
+(P) = Predict sentence <br>
 
 #### (2) Sample attention graph
 <img src='results/dec_combo_attn.png'>
