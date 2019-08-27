@@ -10,7 +10,7 @@ To test the model
 ### Sample Result Screenshot
 * <p>Dataset: [Stanford's Neural Machine Translation Project](https://nlp.stanford.edu/projects/nmt/). English to Deutsch(Germany)</p>
 
-* <p>Sample Translation sentence
+<p>* Sample Translation sentence
 <img src='sample_result.png'>
 (I) = Input sentence <br> 
 (T) = Traget sentence <br> 
