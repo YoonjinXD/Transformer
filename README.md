@@ -23,5 +23,5 @@ To test the model
 
 
 ### Implementation that helped me <br>
-*[graykode's implementation](https://github.com/graykode/nlp-tutorial)* <br>
-*[GLACNet github('build_vocab')](https://github.com/tkim-snu/GLACNet)*
+[graykode's implementation](https://github.com/graykode/nlp-tutorial) <br>
+[GLACNet github('build_vocab')](https://github.com/tkim-snu/GLACNet)
