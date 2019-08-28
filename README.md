@@ -22,6 +22,6 @@ To test the model
 <img src='results/dec_combo_attn-1.png'>
 
 
-*Implementation that helped me*
-*[graykode's implementation](https://github.com/graykode/nlp-tutorial)*
+*Implementation that helped me* <br>
+*[graykode's implementation](https://github.com/graykode/nlp-tutorial)* <br>
 *[GLACNet github('build_vocab')](https://github.com/tkim-snu/GLACNet)*
