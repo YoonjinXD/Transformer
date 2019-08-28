@@ -17,4 +17,4 @@ To test the model
 (P) = Predict sentence <br>
 
 * Sample Attention graph
-<img src='results/dec_combo_attn.png'>
+<img src='results/dec_combo_attn-1.png'>
