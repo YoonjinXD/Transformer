@@ -39,7 +39,7 @@ class Configuration(object):
         self.attention_num_heads= 8
         self.batch_size = 32
 config = Configuration()
-        
+print("CONFIG:", vars(config))        
 """
     [Multi Head Self Attentional Module]
      Where B= batch_size, S= sequence_size, D= model_dimeision, H= head_num
@@ -344,8 +344,8 @@ def main():
 
     # 1. Load data
     print("Load dataset ...")
-    text_en = open('data/translation/train/train.en', 'r', encoding='utf-8').readlines()[:25000]
-    text_de = open('data/translation/train/train.de', 'r', encoding='utf-8').readlines()[:25000]
+    text_en = open('data/translation/train/train.en', 'r', encoding='utf-8').readlines()[:50000]
+    text_de = open('data/translation/train/train.de', 'r', encoding='utf-8').readlines()[:50000]
 
     # 2. Preprocessing
     print("Preprocess ...")
@@ -355,7 +355,7 @@ def main():
     print("English max length: %d \nDeutsch max length: %d" %(en_len, de_len))
 
     # 3. Training Setting
-    epochs = 50
+    epochs = 40
     avg_loss = 0
     total_loss = 0
     source_size = len(en_vocab) +1
