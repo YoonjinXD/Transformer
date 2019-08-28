@@ -329,7 +329,7 @@ def show_attn(attn_name, data_num, attns, input_seq, pred_seq, sample_num):
     attn = attns[data_num][0].data.numpy()
     input_seq = input_seq.split(' ')
     pred_seq = pred_seq.split(' ')
-    g = sns.heatmap(attn[:len(input_seq), :len(pred_seq)+1])
+    g = sns.heatmap(attn[:len(pred_seq), :len(input_seq)])
     g.set_xticklabels(input_seq, rotation=90)
     g.set_yticklabels(pred_seq, rotation=0)
     g.xaxis.tick_top()
