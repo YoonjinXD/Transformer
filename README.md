@@ -10,6 +10,8 @@ To test the model
 ### Sample Result Screenshot
 * Dataset: [Stanford's Neural Machine Translation Project](https://nlp.stanford.edu/projects/nmt/). English to Deutsch(Germany)
 
+* Used only 50000 sentence pairs for training. Used 1 Geforce RTX 2080 Ti. <br> More detail(hyperparameter) - Please check logs directory
+
 * Sample Translation sentence
 <img src='sample_result.png'>
 (I) = Input sentence <br> 
