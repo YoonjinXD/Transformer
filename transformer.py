@@ -322,18 +322,18 @@ def show_clearly(idx_seq, vocab):
             temp.append(word)
     return ' '.join(temp).encode('ascii', 'ignore')
 
-def show_attn(attn_name, data_num, attns, input_seq, pred_seq):
+def show_attn(attn_name, data_num, attns, input_seq, pred_seq, sample_num):
     fig = plt.figure(figsize=(10, 10))
     sns.set_style("ticks",{"xtick.major.size":7, "ytick.major.size":7})
     attns = Variable(attns).cpu()
     attn = attns[data_num][0].data.numpy()
     input_seq = input_seq.split(' ')
     pred_seq = pred_seq.split(' ')
-    g = sns.heatmap(attn[:len(input_seq), :len(pred_seq)])
+    g = sns.heatmap(attn[:len(input_seq), :len(pred_seq)+1])
     g.set_xticklabels(input_seq, rotation=90)
     g.set_yticklabels(pred_seq, rotation=0)
     g.xaxis.tick_top()
-    plt.savefig('results/%s_attn.png' %(attn_name))
+    plt.savefig('results/%s_attn-%d.png' %(attn_name, sample_num))
 
 """[Pipeline]"""
 def main():
@@ -435,9 +435,11 @@ def main():
     target_seq = str(show_clearly(dec_inputs[data_num], de_vocab))[2:]
     pred_seq = str(show_clearly(predict[data_num].data.max(1, keepdim=True)[1], de_vocab))[2:]
     print('(I)', input_seq, '\n(T)', target_seq,'\n(P)', pred_seq)
-    show_attn('enc_self', data_num, enc_self_attns[5], input_seq, pred_seq)
-    show_attn('dec_self', data_num, dec_self_attns[5], input_seq, pred_seq)
-    show_attn('dec_combo', data_num, dec_combo_attns[5], input_seq, pred_seq)
+    
+    sample_num = len(os.listdir('results'))/3
+    show_attn('enc_self', data_num, enc_self_attns[5], input_seq, pred_seq, sample_num)
+    show_attn('dec_self', data_num, dec_self_attns[5], input_seq, pred_seq, sample_num)
+    show_attn('dec_combo', data_num, dec_combo_attns[5], input_seq, pred_seq, sample_num)
     print('\nAttention Graphs are created. Check \'results\' directory.')
 
 main()
