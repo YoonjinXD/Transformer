@@ -17,7 +17,7 @@ To test the model
 (I) = Input sentence <br> 
 (T) = Traget sentence <br> 
 (P) = Predict sentence <br>
-
+<br>
 
 * Sample Attention graph
 <img src='results/dec_combo_attn-1.png'>
